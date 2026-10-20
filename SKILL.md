@@ -1,5 +1,7 @@
 ---
 name: herdr-workspace-lead
+metadata:
+  version: 1.1.0
 description: Coordinate, inspect, dispatch, unblock, and safely clean up multiple coding agents inside Herdr. Every agent in the caller's workspace is callable by default and is addressed by name; agents in other workspaces are callable only when the user names the agent or authorizes that workspace. Use when the user explicitly asks to manage Herdr agents, tabs, workspaces, or worktrees, run a Herdr fleet patrol, or invokes herdr-workspace-lead. Do not use for ordinary single-agent work.
 ---
 
@@ -49,13 +51,14 @@ The user should be able to say "have `bt-codex` do X" without first looking up w
 
 ## Launching helpers
 
-Every helper starts through a launch profile: a command name in the user's interactive shell, usually an alias that carries the model environment and permission flags, or a plain agent executable such as `claude` or `codex`.
+Every helper starts through a launch profile: a command name in the user's interactive shell, usually an alias that carries the model environment and permission flags, or a plain agent executable such as `claude` or `codex`. A profile may carry plain arguments after the command name, such as a launcher that takes a model name: `<launcher> <model>`. Pass the whole profile as one quoted argument.
 
 - **Resolve the profile per role**, first match wins:
   1. A profile the user names for the task.
   2. The role's environment variable (see the table below).
   3. Discovery: `scripts/list_profiles.sh` lists the configured profiles and every alias or executable in the local shell that starts an agent kind Herdr can detect. With one candidate, use it and name it in the report. With several, ask the user once per conversation and suggest exporting the role variable so the question does not recur.
 - **How**: run `scripts/start_helper.sh <name> <profile> <pane-id>`. It checks that the profile exists in the user's shell, starts it with `herdr pane run`, waits for agent detection, and names the agent. Do not use `herdr agent start --kind` for helpers: it cannot carry alias environment variables. Never print an alias definition; it can embed tokens.
+- **One-step wrapper**: where the device provides a wrapper that creates the helper's tab in the caller's workspace, starts a model launcher through `start_helper.sh`, names the agent, and sends the brief without waiting, prefer it. The brief rules below still apply. Keep each model in the harness its launcher selects (for example GPT models in Codex, other models in Claude Code). When a model fails there (for example, it reports no tools), find the cause or pick a sibling model that works in that harness; do not move it to the other harness.
 - **Permission mode comes with the profile.** A profile that skips approval prompts keeps a helper from stalling on Bash approvals; an allowlist does not help, because workers compose compound commands (`mkdir … && cmd > file`, `… | python3 -c`) that never match a prefix rule. A profile with approvals is stricter: its helper turns `blocked` at each prompt and goes through Unblock. Use the resolved profile as is; do not ask about permission mode per dispatch and do not add or strip permission flags.
 - **Where**: each helper gets its own tab in the scoped workspace (`herdr tab create --no-focus`, then start in its root pane). The leader's tab never holds more than two panes: the leader and at most one short-lived helper. Count before splitting; when in doubt, create a tab.
 - **The brief is the gate that always applies**: write the mutation boundary (writable paths, no git, no messages, no external writes) into every brief, and verify it afterwards from outside the transcript (`git status`, file listing). For a helper without approval prompts, the brief is the only gate.
@@ -113,7 +116,7 @@ Read only the relevant section of [references/workflows.md](references/workflows
 - **Patrol**: inventory agents in scope and report status without changing them.
 - **Dispatch and collect**: name and prompt an existing callable agent, or create a pane or worktree in scope and start a named helper; submit bounded work and collect the result.
 - **Unblock**: inspect a blocked or idle agent in scope and proceed only within existing authority.
-- **Cleanup**: verify completion and close only resources that are in scope and owned by this orchestration.
+- **Cleanup**: verify completion and close only resources that are in scope and owned by this orchestration. Close a helper when the user goal it serves is complete, not when one round settles; keep it open while it waits on an external thread or a likely follow-up, and reuse it for follow-ups.
 
 After every dispatch, read [references/monitoring.md](references/monitoring.md): probes and background watch, failure classes and retry limits, silent gateway truncation, `unknown` diagnosis, error codes, user notification, and stop conditions.
 

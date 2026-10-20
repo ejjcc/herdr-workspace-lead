@@ -3,10 +3,11 @@
 #
 # A launch profile is a command name in the user's interactive shell: usually an
 # alias that carries the model environment and permission flags, or a plain
-# agent executable. `herdr agent start --kind` cannot carry alias environment
-# variables, so helpers start through the profile instead.
+# agent executable, optionally followed by plain arguments. `herdr agent start
+# --kind` cannot carry alias environment variables, so helpers start through the
+# profile instead.
 #
-# Usage: start_helper.sh <name> <profile> <pane-id> [timeout-seconds]
+# Usage: start_helper.sh <name> "<profile> [args...]" <pane-id> [timeout-seconds]
 # Output: one JSON object {name, profile, pane_id, agent, agent_status}
 # Exit:   2 usage / invalid name, 3 profile not found, 4 agent not detected
 set -euo pipefail
@@ -22,20 +23,29 @@ if ! [[ "$name" =~ ^[a-z][a-z0-9_-]{0,31}$ ]]; then
   echo "invalid agent name: $name (must match [a-z][a-z0-9_-]{0,31})" >&2
   exit 2
 fi
-if ! [[ "$profile" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]*$ ]]; then
-  echo "invalid profile name: $profile" >&2
+# A profile may carry plain arguments, e.g. a launcher taking a model name: "<launcher> <model>".
+read -r -a words <<<"$profile"
+command_name="${words[0]:-}"
+if ! [[ "$command_name" =~ ^[A-Za-z0-9_][A-Za-z0-9_-]*$ ]]; then
+  echo "invalid profile name: $command_name" >&2
   exit 2
 fi
+for ((i = 1; i < ${#words[@]}; i++)); do
+  if ! [[ "${words[i]}" =~ ^[A-Za-z0-9._/:=@+-]+$ ]]; then
+    echo "invalid profile argument: ${words[i]}" >&2
+    exit 2
+  fi
+done
 
 # Resolve in the user's interactive shell so aliases and functions count.
 # `type` prints alias definitions, which can embed tokens: discard its output.
 shell="${SHELL:-/bin/sh}"
-if ! "$shell" -ic "type $profile" >/dev/null 2>&1; then
-  echo "launch profile '$profile' is not an alias, function, or command in $shell on this device" >&2
+if ! "$shell" -ic "type $command_name" >/dev/null 2>&1; then
+  echo "launch profile '$command_name' is not an alias, function, or command in $shell on this device" >&2
   exit 3
 fi
 
-herdr pane run "$pane" "$profile" >/dev/null
+herdr pane run "$pane" "${words[*]}" >/dev/null
 
 deadline=$((SECONDS + timeout))
 agent=""; status=""

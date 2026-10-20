@@ -165,6 +165,21 @@ After acting, wait for an observed state change and re-read the target. If it re
 
 Cleanup must be explicitly requested or limited to resources created by the current orchestration, and it never leaves the resolved scope.
 
+### When a helper may be closed
+
+A helper's session is closed when the user goal it serves is complete, not when one round of its work settles. A helper that has handed back a result still holds the context it built: the brief, the external thread it opened, the files it read, the repository it learned. Closing it early forces the next follow-up to start a new helper and rebuild that context.
+
+Keep the helper open while any of these holds:
+
+- The work waits on an external party: an oncall or review thread, a CI run, a deploy, an approval, or a reply that has not reached a conclusion.
+- The result may prompt a follow-up the user is likely to ask for: a second fix in the same area, a revision of a draft, a retry after a fix lands.
+- The helper reported partial completion, a blocker, or a decision for the user.
+- The user has not yet reviewed the result.
+
+Close it when the user says the goal is done, when the user asks to close it, or when the follow-up chain is clearly finished and the leader reports that it is closing it. A `done` or `idle` state is not this signal. For a follow-up in the same workstream, prompt the existing helper by name (see Dispatch to an existing agent) instead of starting a new one. Report helpers that remain open, with their name, tab, and what they are waiting for, so the user can see them.
+
+### Closing
+
 1. Wait for a settled state and inspect the final response:
 
    ```bash

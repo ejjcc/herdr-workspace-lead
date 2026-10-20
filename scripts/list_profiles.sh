@@ -6,9 +6,11 @@
 #
 # Usage:  list_profiles.sh
 # Output: one JSON object {configured: {executor, writer}, candidates: [{profile, kind, agent}]}
-# Exit:   1 when the supported agent kinds cannot be read from herdr
+# Exit:   1 when jq is missing or the supported agent kinds cannot be read from herdr
 set -euo pipefail
 set -f  # alias words must not glob-expand
+
+command -v jq >/dev/null 2>&1 || { echo "jq is required" >&2; exit 1; }
 
 kinds="$(herdr agent start --help 2>/dev/null | sed -n 's/.*\[possible values: \(.*\)\].*/\1/p' | tr -d ' ' | tr ',' '\n')"
 if [[ -z "$kinds" ]]; then
